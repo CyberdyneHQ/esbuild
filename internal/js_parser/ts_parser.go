@@ -1806,7 +1806,7 @@ func (p *parser) generateClosureForTypeScriptEnum(
 	return stmts
 }
 
-func (p *parser) wrapInlinedEnum(value js_ast.Expr, comment string) js_ast.Expr {
+func (*parser) wrapInlinedEnum(value js_ast.Expr, comment string) js_ast.Expr {
 	if strings.Contains(comment, "*/") {
 		// Don't wrap with a comment
 		return value
