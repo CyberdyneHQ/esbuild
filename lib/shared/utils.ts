@@ -752,12 +752,12 @@ export function createChannel(streamIn: StreamIn): StreamOut {
               key: buildKey,
               pluginName: name,
             }
-            if (pluginName != null) request.pluginName = pluginName
-            if (importer != null) request.importer = importer
-            if (namespace != null) request.namespace = namespace
-            if (resolveDir != null) request.resolveDir = resolveDir
-            if (kind != null) request.kind = kind
-            if (pluginData != null) request.pluginData = stash.store(pluginData)
+            if (pluginName !== null) request.pluginName = pluginName
+            if (importer !== null) request.importer = importer
+            if (namespace !== null) request.namespace = namespace
+            if (resolveDir !== null) request.resolveDir = resolveDir
+            if (kind !== null) request.kind = kind
+            if (pluginData !== null) request.pluginData = stash.store(pluginData)
 
             sendRequest<protocol.ResolveRequest, protocol.ResolveResponse>(refs, request, (error, response) => {
               if (error !== null) reject(new Error(error))
@@ -799,7 +799,7 @@ export function createChannel(streamIn: StreamIn): StreamOut {
             let filter = getFlag(options, keys, 'filter', mustBeRegExp);
             let namespace = getFlag(options, keys, 'namespace', mustBeString);
             checkForInvalidFlags(options, keys, `in onResolve() call for plugin ${JSON.stringify(name)}`);
-            if (filter == null) throw new Error(`onResolve() call is missing a filter`);
+            if (filter === null) throw new Error(`onResolve() call is missing a filter`);
             let id = nextCallbackID++;
             onResolveCallbacks[id] = { name: name!, callback, note: registeredNote };
             plugin.onResolve.push({ id, filter: filter.source, namespace: namespace || '' });
@@ -812,7 +812,7 @@ export function createChannel(streamIn: StreamIn): StreamOut {
             let filter = getFlag(options, keys, 'filter', mustBeRegExp);
             let namespace = getFlag(options, keys, 'namespace', mustBeString);
             checkForInvalidFlags(options, keys, `in onLoad() call for plugin ${JSON.stringify(name)}`);
-            if (filter == null) throw new Error(`onLoad() call is missing a filter`);
+            if (filter === null) throw new Error(`onLoad() call is missing a filter`);
             let id = nextCallbackID++;
             onLoadCallbacks[id] = { name: name!, callback, note: registeredNote };
             plugin.onLoad.push({ id, filter: filter.source, namespace: namespace || '' });
@@ -842,15 +842,15 @@ export function createChannel(streamIn: StreamIn): StreamOut {
             try {
               let result = await callback();
 
-              if (result != null) {
+              if (result !== null) {
                 if (typeof result !== 'object') throw new Error(`Expected onStart() callback in plugin ${JSON.stringify(name)} to return an object`);
                 let keys: OptionKeys = {};
                 let errors = getFlag(result, keys, 'errors', mustBeArray);
                 let warnings = getFlag(result, keys, 'warnings', mustBeArray);
                 checkForInvalidFlags(result, keys, `from onStart() callback in plugin ${JSON.stringify(name)}`);
 
-                if (errors != null) response.errors!.push(...sanitizeMessages(errors, 'errors', stash, name));
-                if (warnings != null) response.warnings!.push(...sanitizeMessages(warnings, 'warnings', stash, name));
+                if (errors !== null) response.errors!.push(...sanitizeMessages(errors, 'errors', stash, name));
+                if (warnings !== null) response.warnings!.push(...sanitizeMessages(warnings, 'warnings', stash, name));
               }
             } catch (e) {
               response.errors!.push(extractErrorMessageV8(e, streamIn, stash, note && note(), name));
@@ -873,7 +873,7 @@ export function createChannel(streamIn: StreamIn): StreamOut {
                 pluginData: stash.load(request.pluginData),
               });
 
-              if (result != null) {
+              if (result !== null) {
                 if (typeof result !== 'object') throw new Error(`Expected onResolve() callback in plugin ${JSON.stringify(name)} to return an object`);
                 let keys: OptionKeys = {};
                 let pluginName = getFlag(result, keys, 'pluginName', mustBeString);
@@ -890,17 +890,17 @@ export function createChannel(streamIn: StreamIn): StreamOut {
                 checkForInvalidFlags(result, keys, `from onResolve() callback in plugin ${JSON.stringify(name)}`);
 
                 response.id = id;
-                if (pluginName != null) response.pluginName = pluginName;
-                if (path != null) response.path = path;
-                if (namespace != null) response.namespace = namespace;
-                if (suffix != null) response.suffix = suffix;
-                if (external != null) response.external = external;
-                if (sideEffects != null) response.sideEffects = sideEffects;
-                if (pluginData != null) response.pluginData = stash.store(pluginData);
-                if (errors != null) response.errors = sanitizeMessages(errors, 'errors', stash, name);
-                if (warnings != null) response.warnings = sanitizeMessages(warnings, 'warnings', stash, name);
-                if (watchFiles != null) response.watchFiles = sanitizeStringArray(watchFiles, 'watchFiles');
-                if (watchDirs != null) response.watchDirs = sanitizeStringArray(watchDirs, 'watchDirs');
+                if (pluginName !== null) response.pluginName = pluginName;
+                if (path !== null) response.path = path;
+                if (namespace !== null) response.namespace = namespace;
+                if (suffix !== null) response.suffix = suffix;
+                if (external !== null) response.external = external;
+                if (sideEffects !== null) response.sideEffects = sideEffects;
+                if (pluginData !== null) response.pluginData = stash.store(pluginData);
+                if (errors !== null) response.errors = sanitizeMessages(errors, 'errors', stash, name);
+                if (warnings !== null) response.warnings = sanitizeMessages(warnings, 'warnings', stash, name);
+                if (watchFiles !== null) response.watchFiles = sanitizeStringArray(watchFiles, 'watchFiles');
+                if (watchDirs !== null) response.watchDirs = sanitizeStringArray(watchDirs, 'watchDirs');
                 break;
               }
             } catch (e) {
@@ -922,7 +922,7 @@ export function createChannel(streamIn: StreamIn): StreamOut {
                 pluginData: stash.load(request.pluginData),
               });
 
-              if (result != null) {
+              if (result !== null) {
                 if (typeof result !== 'object') throw new Error(`Expected onLoad() callback in plugin ${JSON.stringify(name)} to return an object`);
                 let keys: OptionKeys = {};
                 let pluginName = getFlag(result, keys, 'pluginName', mustBeString);
@@ -937,16 +937,16 @@ export function createChannel(streamIn: StreamIn): StreamOut {
                 checkForInvalidFlags(result, keys, `from onLoad() callback in plugin ${JSON.stringify(name)}`);
 
                 response.id = id;
-                if (pluginName != null) response.pluginName = pluginName;
+                if (pluginName !== null) response.pluginName = pluginName;
                 if (contents instanceof Uint8Array) response.contents = contents;
-                else if (contents != null) response.contents = protocol.encodeUTF8(contents);
-                if (resolveDir != null) response.resolveDir = resolveDir;
-                if (pluginData != null) response.pluginData = stash.store(pluginData);
-                if (loader != null) response.loader = loader;
-                if (errors != null) response.errors = sanitizeMessages(errors, 'errors', stash, name);
-                if (warnings != null) response.warnings = sanitizeMessages(warnings, 'warnings', stash, name);
-                if (watchFiles != null) response.watchFiles = sanitizeStringArray(watchFiles, 'watchFiles');
-                if (watchDirs != null) response.watchDirs = sanitizeStringArray(watchDirs, 'watchDirs');
+                else if (contents !== null) response.contents = protocol.encodeUTF8(contents);
+                if (resolveDir !== null) response.resolveDir = resolveDir;
+                if (pluginData !== null) response.pluginData = stash.store(pluginData);
+                if (loader !== null) response.loader = loader;
+                if (errors !== null) response.errors = sanitizeMessages(errors, 'errors', stash, name);
+                if (warnings !== null) response.warnings = sanitizeMessages(warnings, 'warnings', stash, name);
+                if (watchFiles !== null) response.watchFiles = sanitizeStringArray(watchFiles, 'watchFiles');
+                if (watchDirs !== null) response.watchDirs = sanitizeStringArray(watchDirs, 'watchDirs');
                 break;
               }
             } catch (e) {
@@ -1180,7 +1180,7 @@ export function createChannel(streamIn: StreamIn): StreamOut {
       if (response.outputFiles) result.outputFiles = response!.outputFiles.map(convertOutputFiles);
       if (response.metafile) result.metafile = JSON.parse(response!.metafile);
       if (response.mangleCache) result.mangleCache = response!.mangleCache;
-      if (response.writeToStdout !== void 0) console.log(protocol.decodeUTF8(response!.writeToStdout).replace(/\n$/, ''));
+      if (response.writeToStdout !== void 0) {}
     };
     let buildResponseToResult = (
       response: protocol.BuildResponse | null,
@@ -1550,7 +1550,7 @@ function parseStackLinesV8(streamIn: StreamIn, lines: string[], ident: string): 
           } catch {
             break
           }
-          let lineText = contents.split(/\r\n|\r|\n|\u2028|\u2029/)[+match[2] - 1] || ''
+          let lineText = contents.split(/\r\n|\r|\n|\u2028|\u2029/u)[+match[2] - 1] || ''
           let column = +match[3] - 1
           let length = lineText.slice(column, column + ident.length) === ident ? ident.length : 0
           return {
@@ -1595,7 +1595,7 @@ function replaceDetailsInMessages(messages: types.Message[], stash: ObjectStash)
 }
 
 function sanitizeLocation(location: types.PartialMessage['location'], where: string): types.Message['location'] {
-  if (location == null) return null;
+  if (location === null) return null;
 
   let keys: OptionKeys = {};
   let file = getFlag(location, keys, 'file', mustBeString);
