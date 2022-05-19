@@ -1235,7 +1235,7 @@ func (r resolverQuery) esmPackageTargetReverseResolve(
 					return true, keyWithoutTrailingStar + starData, target.firstToken
 				}
 			}
-			break
+
 		}
 
 	case pjObject:
