@@ -8,6 +8,9 @@ enabled = true
 name = "go"
 enabled = true
 
+  [analyzers.meta]
+  import_root = "github.com/CyberdyneHQ/esbuild"
+
 [[transformers]]
 name = "gofmt"
 enabled = true
