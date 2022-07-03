@@ -226,6 +226,7 @@ let initializeWasCalled = false;
 export let initialize: typeof types.initialize = options => {
   options = common.validateInitializeOptions(options || {});
   if (options.wasmURL) throw new Error(`The "wasmURL" option only works in the browser`)
+  if (options.wasmModule) throw new Error(`The "wasmModule" option only works in the browser`)
   if (options.worker) throw new Error(`The "worker" option only works in the browser`)
   if (initializeWasCalled) throw new Error('Cannot call "initialize" more than once')
   ensureServiceIsRunning()
@@ -262,7 +263,7 @@ let ensureServiceIsRunning = (): Service => {
     },
     readFileSync: fs.readFileSync,
     isSync: false,
-    isBrowser: false,
+    isWriteUnavailable: false,
     esbuild: ourselves,
   });
 
@@ -364,7 +365,7 @@ let runServiceSync = (callback: (service: common.StreamService) => void): void =
       stdin = bytes;
     },
     isSync: true,
-    isBrowser: false,
+    isWriteUnavailable: false,
     esbuild: ourselves,
   });
   callback(service);
@@ -426,7 +427,7 @@ let startWorkerThreadService = (worker_threads: typeof import('worker_threads'))
   // This forbids options which would cause structured clone errors
   let fakeBuildError = (text: string) => {
     let error: any = new Error(`Build failed with 1 error:\nerror: ${text}`);
-    let errors: types.Message[] = [{ pluginName: '', text, location: null, notes: [], detail: void 0 }];
+    let errors: types.Message[] = [{ id: '', pluginName: '', text, location: null, notes: [], detail: void 0 }];
     error.errors = errors;
     error.warnings = [];
     return error;

@@ -141,6 +141,8 @@ function pushCommonFlags(flags: string[], options: CommonOptions, keys: OptionKe
   let jsxFactory = getFlag(options, keys, 'jsxFactory', mustBeString);
   let jsxFragment = getFlag(options, keys, 'jsxFragment', mustBeString);
   let define = getFlag(options, keys, 'define', mustBeObject);
+  let logOverride = getFlag(options, keys, 'logOverride', mustBeObject);
+  let supported = getFlag(options, keys, 'supported', mustBeObject);
   let pure = getFlag(options, keys, 'pure', mustBeArray);
   let keepNames = getFlag(options, keys, 'keepNames', mustBeBoolean);
 
@@ -174,6 +176,18 @@ function pushCommonFlags(flags: string[], options: CommonOptions, keys: OptionKe
     for (let key in define) {
       if (key.indexOf('=') >= 0) throw new Error(`Invalid define: ${key}`);
       flags.push(`--define:${key}=${define[key]}`);
+    }
+  }
+  if (logOverride) {
+    for (let key in logOverride) {
+      if (key.indexOf('=') >= 0) throw new Error(`Invalid log override: ${key}`);
+      flags.push(`--log-override:${key}=${logOverride[key]}`);
+    }
+  }
+  if (supported) {
+    for (let key in supported) {
+      if (key.indexOf('=') >= 0) throw new Error(`Invalid supported: ${key}`);
+      flags.push(`--supported:${key}=${supported[key]}`);
     }
   }
   if (pure) for (let fn of pure) flags.push(`--pure:${fn}`);
@@ -410,7 +424,7 @@ export interface StreamIn {
   writeToStdin: (data: Uint8Array) => void;
   readFileSync?: (path: string, encoding: 'utf8') => string;
   isSync: boolean;
-  isBrowser: boolean;
+  isWriteUnavailable: boolean;
   esbuild: types.PluginBuild['esbuild'];
 }
 
@@ -1144,7 +1158,7 @@ export function createChannel(streamIn: StreamIn): StreamOut {
         if (callerRefs) callerRefs.unref()
       },
     }
-    let writeDefault = !streamIn.isBrowser;
+    let writeDefault = !streamIn.isWriteUnavailable;
     let {
       entries,
       flags,
@@ -1205,7 +1219,7 @@ export function createChannel(streamIn: StreamIn): StreamOut {
               sendRequest<protocol.RebuildRequest, protocol.BuildResponse>(refs, { command: 'rebuild', key },
                 (error2, response2) => {
                   if (error2) {
-                    const message: types.Message = { pluginName: '', text: error2, location: null, notes: [], detail: void 0 };
+                    const message: types.Message = { id: '', pluginName: '', text: error2, location: null, notes: [], detail: void 0 };
                     return callback(failureErrorWithLog('Build failed', [message], []), null);
                   }
                   buildResponseToResult(response2, (error3, result3) => {
@@ -1273,7 +1287,7 @@ export function createChannel(streamIn: StreamIn): StreamOut {
       });
     };
 
-    if (write && streamIn.isBrowser) throw new Error(`Cannot enable "write" in the browser`);
+    if (write && streamIn.isWriteUnavailable) throw new Error(`The "write" option is unavailable in this environment`);
     if (incremental && streamIn.isSync) throw new Error(`Cannot use "incremental" with a synchronous build`);
     if (watch && streamIn.isSync) throw new Error(`Cannot use "watch" with a synchronous build`);
     sendRequest<protocol.BuildRequest, protocol.BuildResponse>(refs, request, (error, response) => {
@@ -1514,7 +1528,7 @@ function extractErrorMessageV8(e: any, streamIn: StreamIn, stash: ObjectStash | 
   } catch {
   }
 
-  return { pluginName, text, location, notes: note ? [note] : [], detail: stash ? stash.store(e) : -1 }
+  return { id: '', pluginName, text, location, notes: note ? [note] : [], detail: stash ? stash.store(e) : -1 }
 }
 
 function parseStackLinesV8(streamIn: StreamIn, lines: string[], ident: string): types.Location | null {
@@ -1624,6 +1638,7 @@ function sanitizeMessages(messages: types.PartialMessage[], property: string, st
 
   for (const message of messages) {
     let keys: OptionKeys = {};
+    let id = getFlag(message, keys, 'id', mustBeString);
     let pluginName = getFlag(message, keys, 'pluginName', mustBeString);
     let text = getFlag(message, keys, 'text', mustBeString);
     let location = getFlag(message, keys, 'location', mustBeObjectOrNull);
@@ -1647,6 +1662,7 @@ function sanitizeMessages(messages: types.PartialMessage[], property: string, st
     }
 
     messagesClone.push({
+      id: id || '',
       pluginName: pluginName || fallbackPluginName,
       text: text || '',
       location: sanitizeLocation(location, where),

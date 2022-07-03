@@ -1413,7 +1413,7 @@ func (lexer *Lexer) Next() {
 				if lexer.codePoint == '>' && lexer.HasNewlineBefore {
 					lexer.step()
 					lexer.LegacyHTMLCommentRange = lexer.Range()
-					lexer.log.Add(logger.Warning, &lexer.tracker, lexer.Range(),
+					lexer.log.AddID(logger.MsgID_JS_HTMLCommentInJS, logger.Warning, &lexer.tracker, lexer.Range(),
 						"Treating \"-->\" as the start of a legacy HTML single-line comment")
 				singleLineHTMLCloseComment:
 					for {
@@ -1568,7 +1568,7 @@ func (lexer *Lexer) Next() {
 					lexer.step()
 					lexer.step()
 					lexer.LegacyHTMLCommentRange = lexer.Range()
-					lexer.log.Add(logger.Warning, &lexer.tracker, lexer.Range(),
+					lexer.log.AddID(logger.MsgID_JS_HTMLCommentInJS, logger.Warning, &lexer.tracker, lexer.Range(),
 						"Treating \"<!--\" as the start of a legacy HTML single-line comment")
 				singleLineHTMLOpenComment:
 					for {
@@ -2208,7 +2208,7 @@ func (lexer *Lexer) ScanRegExp() {
 			bits := uint32(0)
 			for IsIdentifierContinue(lexer.codePoint) {
 				switch lexer.codePoint {
-				case 'g', 'i', 'm', 's', 'u', 'y':
+				case 'd', 'g', 'i', 'm', 's', 'u', 'y':
 					bit := uint32(1) << uint32(lexer.codePoint-'a')
 					if (bit & bits) != 0 {
 						// Reject duplicate flags
@@ -2217,7 +2217,7 @@ func (lexer *Lexer) ScanRegExp() {
 						for r1.Loc.Start < r2.Loc.Start && lexer.source.Contents[r1.Loc.Start] != byte(lexer.codePoint) {
 							r1.Loc.Start++
 						}
-						lexer.log.AddWithNotes(logger.Error, &lexer.tracker, r2,
+						lexer.log.AddErrorWithNotes(&lexer.tracker, r2,
 							fmt.Sprintf("Duplicate flag \"%c\" in regular expression", lexer.codePoint),
 							[]logger.MsgData{lexer.tracker.MsgData(r1,
 								fmt.Sprintf("The first \"%c\" was here:", lexer.codePoint))})
@@ -2628,7 +2628,7 @@ func (lexer *Lexer) addRangeError(r logger.Range, text string) {
 	lexer.prevErrorLoc = r.Loc
 
 	if !lexer.IsLogDisabled {
-		lexer.log.Add(logger.Error, &lexer.tracker, r, text)
+		lexer.log.AddError(&lexer.tracker, r, text)
 	}
 }
 
@@ -2654,7 +2654,7 @@ func (lexer *Lexer) AddRangeErrorWithNotes(r logger.Range, text string, notes []
 	lexer.prevErrorLoc = r.Loc
 
 	if !lexer.IsLogDisabled {
-		lexer.log.AddWithNotes(logger.Error, &lexer.tracker, r, text, notes)
+		lexer.log.AddErrorWithNotes(&lexer.tracker, r, text, notes)
 	}
 }
 

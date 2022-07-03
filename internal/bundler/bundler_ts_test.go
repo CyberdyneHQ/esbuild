@@ -5,7 +5,6 @@ import (
 
 	"github.com/evanw/esbuild/internal/compat"
 	"github.com/evanw/esbuild/internal/config"
-	"github.com/evanw/esbuild/internal/js_ast"
 )
 
 var ts_suite = suite{
@@ -1719,8 +1718,8 @@ func TestTSEnumDefine(t *testing.T) {
 			Defines: &config.ProcessedDefines{
 				IdentifierDefines: map[string]config.DefineData{
 					"d": {
-						DefineFunc: func(args config.DefineArgs) js_ast.E {
-							return &js_ast.EIdentifier{Ref: args.FindSymbol(args.Loc, "b")}
+						DefineExpr: &config.DefineExpr{
+							Parts: []string{"b"},
 						},
 					},
 				},
@@ -1929,5 +1928,44 @@ func TestTSEnumExportClause(t *testing.T) {
 			Mode:         config.ModeBundle,
 			AbsOutputDir: "/out",
 		},
+	})
+}
+
+// This checks that we don't generate a warning for code that the TypeScript
+// compiler generates that looks like this:
+//
+//   var __rest = (this && this.__rest) || function (s, e) {
+//     ...
+//   };
+//
+func TestTSThisIsUndefinedWarning(t *testing.T) {
+	ts_suite.expectBundled(t, bundled{
+		files: map[string]string{
+			"/warning1.ts": `export var foo = this`,
+			"/warning2.ts": `export var foo = this || this.foo`,
+			"/warning3.ts": `export var foo = this ? this.foo : null`,
+
+			"/silent1.ts": `export var foo = this && this.foo`,
+			"/silent2.ts": `export var foo = this && (() => this.foo)`,
+		},
+		entryPaths: []string{
+			"/warning1.ts",
+			"/warning2.ts",
+			"/warning3.ts",
+
+			"/silent1.ts",
+			"/silent2.ts",
+		},
+		options: config.Options{
+			Mode:         config.ModeBundle,
+			AbsOutputDir: "/out",
+		},
+		expectedScanLog: `warning1.ts: WARNING: Top-level "this" will be replaced with undefined since this file is an ECMAScript module
+warning1.ts: NOTE: This file is considered to be an ECMAScript module because of the "export" keyword here:
+warning2.ts: WARNING: Top-level "this" will be replaced with undefined since this file is an ECMAScript module
+warning2.ts: NOTE: This file is considered to be an ECMAScript module because of the "export" keyword here:
+warning3.ts: WARNING: Top-level "this" will be replaced with undefined since this file is an ECMAScript module
+warning3.ts: NOTE: This file is considered to be an ECMAScript module because of the "export" keyword here:
+`,
 	})
 }

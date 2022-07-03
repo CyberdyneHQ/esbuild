@@ -16,15 +16,31 @@ import (
 
 func (p *parser) prettyPrintTargetEnvironment(feature compat.JSFeature) (where string, notes []logger.MsgData) {
 	where = "the configured target environment"
+	overrides := ""
+	if p.options.unsupportedJSFeatureOverridesMask != 0 {
+		count := 0
+		mask := p.options.unsupportedJSFeatureOverridesMask
+		for mask != 0 {
+			if (mask & 1) != 0 {
+				count++
+			}
+			mask >>= 1
+		}
+		s := "s"
+		if count == 1 {
+			s = ""
+		}
+		overrides = fmt.Sprintf(" + %d override%s", count, s)
+	}
 	if tsTarget := p.options.tsTarget; tsTarget != nil &&
 		p.options.targetFromAPI == config.TargetWasUnconfigured &&
 		tsTarget.UnsupportedJSFeatures.Has(feature) {
 		tracker := logger.MakeLineColumnTracker(&tsTarget.Source)
-		where = fmt.Sprintf("%s (%q)", where, tsTarget.Target)
+		where = fmt.Sprintf("%s (%q%s)", where, tsTarget.Target, overrides)
 		notes = []logger.MsgData{tracker.MsgData(tsTarget.Range, fmt.Sprintf(
 			"The target environment was set to %q here:", tsTarget.Target))}
 	} else if p.options.originalTargetEnv != "" {
-		where = fmt.Sprintf("%s (%s)", where, p.options.originalTargetEnv)
+		where = fmt.Sprintf("%s (%s%s)", where, p.options.originalTargetEnv, overrides)
 	}
 	return
 }
@@ -34,7 +50,7 @@ func (p *parser) markSyntaxFeature(feature compat.JSFeature, r logger.Range) (di
 
 	if !p.options.unsupportedJSFeatures.Has(feature) {
 		if feature == compat.TopLevelAwait && !p.options.outputFormat.KeepES6ImportExportSyntax() {
-			p.log.Add(logger.Error, &p.tracker, r, fmt.Sprintf(
+			p.log.AddError(&p.tracker, r, fmt.Sprintf(
 				"Top-level await is currently not supported with the %q output format", p.options.outputFormat.String()))
 			return
 		}
@@ -71,11 +87,8 @@ func (p *parser) markSyntaxFeature(feature compat.JSFeature, r logger.Range) (di
 	case compat.NewTarget:
 		name = "new.target"
 
-	case compat.Const:
-		name = "const"
-
-	case compat.Let:
-		name = "let"
+	case compat.ConstAndLet:
+		name = p.source.TextForRange(r)
 
 	case compat.Class:
 		name = "class syntax"
@@ -96,39 +109,39 @@ func (p *parser) markSyntaxFeature(feature compat.JSFeature, r logger.Range) (di
 		name = "non-identifier array rest patterns"
 
 	case compat.ImportAssertions:
-		p.log.AddWithNotes(logger.Error, &p.tracker, r, fmt.Sprintf(
+		p.log.AddErrorWithNotes(&p.tracker, r, fmt.Sprintf(
 			"Using an arbitrary value as the second argument to \"import()\" is not possible in %s", where), notes)
 		return
 
 	case compat.TopLevelAwait:
-		p.log.AddWithNotes(logger.Error, &p.tracker, r, fmt.Sprintf(
+		p.log.AddErrorWithNotes(&p.tracker, r, fmt.Sprintf(
 			"Top-level await is not available in %s", where), notes)
 		return
 
 	case compat.ArbitraryModuleNamespaceNames:
-		p.log.AddWithNotes(logger.Error, &p.tracker, r, fmt.Sprintf(
+		p.log.AddErrorWithNotes(&p.tracker, r, fmt.Sprintf(
 			"Using a string as a module namespace identifier name is not supported in %s", where), notes)
 		return
 
-	case compat.BigInt:
+	case compat.Bigint:
 		// Transforming these will never be supported
-		p.log.AddWithNotes(logger.Error, &p.tracker, r, fmt.Sprintf(
+		p.log.AddErrorWithNotes(&p.tracker, r, fmt.Sprintf(
 			"Big integer literals are not available in %s", where), notes)
 		return
 
 	case compat.ImportMeta:
 		// This can't be polyfilled
-		p.log.AddWithNotes(logger.Warning, &p.tracker, r, fmt.Sprintf(
+		p.log.AddIDWithNotes(logger.MsgID_JS_EmptyImportMeta, logger.Warning, &p.tracker, r, fmt.Sprintf(
 			"\"import.meta\" is not available in %s and will be empty", where), notes)
 		return
 
 	default:
-		p.log.AddWithNotes(logger.Error, &p.tracker, r, fmt.Sprintf(
+		p.log.AddErrorWithNotes(&p.tracker, r, fmt.Sprintf(
 			"This feature is not available in %s", where), notes)
 		return
 	}
 
-	p.log.AddWithNotes(logger.Error, &p.tracker, r, fmt.Sprintf(
+	p.log.AddErrorWithNotes(&p.tracker, r, fmt.Sprintf(
 		"Transforming %s to %s is not supported yet", name, where), notes)
 	return
 }
@@ -201,6 +214,12 @@ func (p *parser) markStrictModeFeature(feature strictModeFeature, r logger.Range
 			notes = []logger.MsgData{p.tracker.MsgData(p.enclosingClassKeyword,
 				"All code inside a class is implicitly in strict mode")}
 
+		case js_ast.ImplicitStrictModeTSAlwaysStrict:
+			tsAlwaysStrict := p.options.tsAlwaysStrict
+			t := logger.MakeLineColumnTracker(&tsAlwaysStrict.Source)
+			notes = []logger.MsgData{t.MsgData(tsAlwaysStrict.Range, fmt.Sprintf(
+				"TypeScript's %q setting was enabled here:", tsAlwaysStrict.Name))}
+
 		case js_ast.ExplicitStrictMode:
 			notes = []logger.MsgData{p.tracker.MsgData(p.source.RangeOfString(p.currentScope.UseStrictLoc),
 				"Strict mode is triggered by the \"use strict\" directive here:")}
@@ -210,10 +229,10 @@ func (p *parser) markStrictModeFeature(feature strictModeFeature, r logger.Range
 			where = "in an ECMAScript module"
 		}
 
-		p.log.AddWithNotes(logger.Error, &p.tracker, r,
+		p.log.AddErrorWithNotes(&p.tracker, r,
 			fmt.Sprintf("%s cannot be used %s", text, where), notes)
 	} else if !canBeTransformed && p.isStrictModeOutputFormat() {
-		p.log.Add(logger.Error, &p.tracker, r,
+		p.log.AddError(&p.tracker, r,
 			fmt.Sprintf("%s cannot be used with the \"esm\" output format due to strict mode", text))
 	}
 }
@@ -236,7 +255,10 @@ func (p *parser) captureThis() js_ast.Ref {
 		ref := p.newSymbol(js_ast.SymbolHoisted, "_this")
 		p.fnOnlyDataVisit.thisCaptureRef = &ref
 	}
-	return *p.fnOnlyDataVisit.thisCaptureRef
+
+	ref := *p.fnOnlyDataVisit.thisCaptureRef
+	p.recordUsage(ref)
+	return ref
 }
 
 func (p *parser) captureArguments() js_ast.Ref {
@@ -244,7 +266,10 @@ func (p *parser) captureArguments() js_ast.Ref {
 		ref := p.newSymbol(js_ast.SymbolHoisted, "_arguments")
 		p.fnOnlyDataVisit.argumentsCaptureRef = &ref
 	}
-	return *p.fnOnlyDataVisit.argumentsCaptureRef
+
+	ref := *p.fnOnlyDataVisit.argumentsCaptureRef
+	p.recordUsage(ref)
+	return ref
 }
 
 func (p *parser) lowerFunction(
@@ -1421,7 +1446,7 @@ func (p *parser) lowerObjectRestHelper(
 		return nil, false
 	}
 
-	// Scan for object rest bindings and initalize rest binding containment
+	// Scan for object rest bindings and initialize rest binding containment
 	containsRestBinding := make(map[js_ast.E]bool)
 	var findRestBindings func(js_ast.Expr) bool
 	findRestBindings = func(expr js_ast.Expr) bool {
@@ -1777,7 +1802,7 @@ func (p *parser) computeClassLoweringInfo(class *js_ast.Class) (result classLowe
 		}
 
 		if private, ok := prop.Key.Data.(*js_ast.EPrivateIdentifier); ok {
-			if prop.IsStatic {
+			if prop.Flags.Has(js_ast.PropertyIsStatic) {
 				if p.privateSymbolNeedsToBeLowered(private) {
 					result.lowerAllStaticFields = true
 				}
@@ -1866,7 +1891,7 @@ func (p *parser) computeClassLoweringInfo(class *js_ast.Class) (result classLowe
 		//
 		// In that case the initializer of "bar" would fail to call "#foo" because
 		// it's only added to the instance in the body of the constructor.
-		if prop.IsMethod {
+		if prop.Flags.Has(js_ast.PropertyIsMethod) {
 			// We need to shim "super()" inside the constructor if this is a derived
 			// class and the constructor has any parameter properties, since those
 			// use "this" and we can only access "this" after "super()" is called
@@ -1885,7 +1910,7 @@ func (p *parser) computeClassLoweringInfo(class *js_ast.Class) (result classLowe
 			continue
 		}
 
-		if prop.IsStatic {
+		if prop.Flags.Has(js_ast.PropertyIsStatic) {
 			// Static fields must be lowered if the target doesn't support them
 			if p.options.unsupportedJSFeatures.Has(compat.ClassStaticField) {
 				result.lowerAllStaticFields = true
@@ -2076,7 +2101,7 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 				}
 			}
 			p.recordUsage(class.Name.Ref)
-			return js_ast.Expr{Loc: classLoc, Data: &js_ast.EIdentifier{Ref: class.Name.Ref}}
+			return js_ast.Expr{Loc: class.Name.Loc, Data: &js_ast.EIdentifier{Ref: class.Name.Ref}}
 		}
 	}
 
@@ -2086,8 +2111,9 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 		if prop.Kind == js_ast.PropertyClassStaticBlock {
 			if p.options.unsupportedJSFeatures.Has(compat.ClassStaticBlocks) {
 				if block := *prop.ClassStaticBlock; len(block.Block.Stmts) > 0 {
-					staticMembers = append(staticMembers, js_ast.Expr{Loc: block.Loc, Data: &js_ast.ECall{
-						Target: js_ast.Expr{Loc: block.Loc, Data: &js_ast.EArrow{Body: js_ast.FnBody{
+					staticMembers = append(staticMembers, js_ast.Expr{Loc: prop.Loc, Data: &js_ast.ECall{
+						Target: js_ast.Expr{Loc: prop.Loc, Data: &js_ast.EArrow{Body: js_ast.FnBody{
+							Loc:   block.Loc,
 							Block: block.Block,
 						}}},
 					}})
@@ -2102,7 +2128,7 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 		}
 
 		// Merge parameter decorators with method decorators
-		if p.options.ts.Parse && prop.IsMethod {
+		if p.options.ts.Parse && prop.Flags.Has(js_ast.PropertyIsMethod) {
 			if fn, ok := prop.ValueOrNil.Data.(*js_ast.EFunction); ok {
 				isConstructor := false
 				if key, ok := prop.Key.Data.(*js_ast.EString); ok {
@@ -2133,13 +2159,13 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 		// strict class field initialization, so we shouldn't either.
 		private, _ := prop.Key.Data.(*js_ast.EPrivateIdentifier)
 		mustLowerPrivate := private != nil && p.privateSymbolNeedsToBeLowered(private)
-		shouldOmitFieldInitializer := p.options.ts.Parse && !prop.IsMethod && prop.InitializerOrNil.Data == nil &&
+		shouldOmitFieldInitializer := p.options.ts.Parse && !prop.Flags.Has(js_ast.PropertyIsMethod) && prop.InitializerOrNil.Data == nil &&
 			!classLoweringInfo.useDefineForClassFields && !mustLowerPrivate
 
 		// Class fields must be lowered if the environment doesn't support them
 		mustLowerField := false
-		if !prop.IsMethod {
-			if prop.IsStatic {
+		if !prop.Flags.Has(js_ast.PropertyIsMethod) {
+			if prop.Flags.Has(js_ast.PropertyIsStatic) {
 				mustLowerField = classLoweringInfo.lowerAllStaticFields
 			} else {
 				mustLowerField = classLoweringInfo.lowerAllInstanceFields
@@ -2157,10 +2183,10 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 		// Make sure the order of computed property keys doesn't change. These
 		// expressions have side effects and must be evaluated in order.
 		keyExprNoSideEffects := prop.Key
-		if prop.IsComputed && (len(prop.TSDecorators) > 0 ||
+		if prop.Flags.Has(js_ast.PropertyIsComputed) && (len(prop.TSDecorators) > 0 ||
 			mustLowerField || computedPropertyCache.Data != nil) {
 			needsKey := true
-			if len(prop.TSDecorators) == 0 && (prop.IsMethod || shouldOmitFieldInitializer || !mustLowerField) {
+			if len(prop.TSDecorators) == 0 && (prop.Flags.Has(js_ast.PropertyIsMethod) || shouldOmitFieldInitializer || !mustLowerField) {
 				needsKey = false
 			}
 
@@ -2207,13 +2233,13 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 
 				// This code tells "__decorateClass()" if the descriptor should be undefined
 				descriptorKind := float64(1)
-				if !prop.IsMethod {
+				if !prop.Flags.Has(js_ast.PropertyIsMethod) {
 					descriptorKind = 2
 				}
 
 				// Instance properties use the prototype, static properties use the class
 				var target js_ast.Expr
-				if prop.IsStatic {
+				if prop.Flags.Has(js_ast.PropertyIsStatic) {
 					target = nameFunc()
 				} else {
 					target = js_ast.Expr{Loc: loc, Data: &js_ast.EDot{Target: nameFunc(), Name: "prototype", NameLoc: loc}}
@@ -2227,7 +2253,7 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 				})
 
 				// Static decorators are grouped after instance decorators
-				if prop.IsStatic {
+				if prop.Flags.Has(js_ast.PropertyIsStatic) {
 					staticDecorators = append(staticDecorators, decorator)
 				} else {
 					instanceDecorators = append(instanceDecorators, decorator)
@@ -2238,16 +2264,16 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 		// Handle lowering of instance and static fields. Move their initializers
 		// from the class body to either the constructor (instance fields) or after
 		// the class (static fields).
-		if !prop.IsMethod && mustLowerField {
+		if !prop.Flags.Has(js_ast.PropertyIsMethod) && mustLowerField {
 			// The TypeScript compiler doesn't follow the JavaScript spec for
 			// uninitialized fields. They are supposed to be set to undefined but the
 			// TypeScript compiler just omits them entirely.
 			if !shouldOmitFieldInitializer {
-				loc := prop.Key.Loc
+				loc := prop.Loc
 
 				// Determine where to store the field
 				var target js_ast.Expr
-				if prop.IsStatic {
+				if prop.Flags.Has(js_ast.PropertyIsStatic) {
 					target = nameFunc()
 				} else {
 					target = js_ast.Expr{Loc: loc, Data: js_ast.EThisShared}
@@ -2274,15 +2300,15 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 						p.moduleScope.Generated = append(p.moduleScope.Generated, p.weakMapRef)
 					}
 					privateMembers = append(privateMembers, js_ast.Assign(
-						js_ast.Expr{Loc: loc, Data: &js_ast.EIdentifier{Ref: ref}},
-						js_ast.Expr{Loc: loc, Data: &js_ast.ENew{Target: js_ast.Expr{Loc: loc, Data: &js_ast.EIdentifier{Ref: p.weakMapRef}}}},
+						js_ast.Expr{Loc: prop.Key.Loc, Data: &js_ast.EIdentifier{Ref: ref}},
+						js_ast.Expr{Loc: prop.Key.Loc, Data: &js_ast.ENew{Target: js_ast.Expr{Loc: prop.Key.Loc, Data: &js_ast.EIdentifier{Ref: p.weakMapRef}}}},
 					))
 					p.recordUsage(ref)
 
 					// Add every newly-constructed instance into this map
 					memberExpr = p.callRuntime(loc, "__privateAdd", []js_ast.Expr{
 						target,
-						{Loc: loc, Data: &js_ast.EIdentifier{Ref: ref}},
+						{Loc: prop.Key.Loc, Data: &js_ast.EIdentifier{Ref: ref}},
 						init,
 					})
 					p.recordUsage(ref)
@@ -2293,11 +2319,11 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 						memberExpr = p.callRuntime(loc, "__publicField", []js_ast.Expr{target, prop.Key, init})
 					}
 				} else {
-					if key, ok := prop.Key.Data.(*js_ast.EString); ok && !prop.IsComputed && !prop.PreferQuotedKey {
+					if key, ok := prop.Key.Data.(*js_ast.EString); ok && !prop.Flags.Has(js_ast.PropertyIsComputed) && !prop.Flags.Has(js_ast.PropertyPreferQuotedKey) {
 						target = js_ast.Expr{Loc: loc, Data: &js_ast.EDot{
 							Target:  target,
 							Name:    helpers.UTF16ToString(key.Value),
-							NameLoc: loc,
+							NameLoc: prop.Key.Loc,
 						}}
 					} else {
 						target = js_ast.Expr{Loc: loc, Data: &js_ast.EIndex{
@@ -2309,7 +2335,7 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 					memberExpr = js_ast.Assign(target, init)
 				}
 
-				if prop.IsStatic {
+				if prop.Flags.Has(js_ast.PropertyIsStatic) {
 					// Move this property to an assignment after the class ends
 					staticMembers = append(staticMembers, memberExpr)
 				} else {
@@ -2327,9 +2353,9 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 			prop.InitializerOrNil = js_ast.Expr{}
 		}
 
-		if prop.IsMethod {
+		if prop.Flags.Has(js_ast.PropertyIsMethod) {
 			if mustLowerPrivate {
-				loc := prop.Key.Loc
+				loc := prop.Loc
 
 				// Don't generate a symbol for a getter/setter pair twice
 				if p.symbols[private.Ref.InnerIndex].Link == js_ast.InvalidRef {
@@ -2343,14 +2369,14 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 						p.moduleScope.Generated = append(p.moduleScope.Generated, p.weakSetRef)
 					}
 					privateMembers = append(privateMembers, js_ast.Assign(
-						js_ast.Expr{Loc: loc, Data: &js_ast.EIdentifier{Ref: ref}},
-						js_ast.Expr{Loc: loc, Data: &js_ast.ENew{Target: js_ast.Expr{Loc: loc, Data: &js_ast.EIdentifier{Ref: p.weakSetRef}}}},
+						js_ast.Expr{Loc: prop.Key.Loc, Data: &js_ast.EIdentifier{Ref: ref}},
+						js_ast.Expr{Loc: prop.Key.Loc, Data: &js_ast.ENew{Target: js_ast.Expr{Loc: prop.Key.Loc, Data: &js_ast.EIdentifier{Ref: p.weakSetRef}}}},
 					))
 					p.recordUsage(ref)
 
 					// Determine where to store the private method
 					var target js_ast.Expr
-					if prop.IsStatic {
+					if prop.Flags.Has(js_ast.PropertyIsStatic) {
 						target = nameFunc()
 					} else {
 						target = js_ast.Expr{Loc: loc, Data: js_ast.EThisShared}
@@ -2359,7 +2385,7 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 					// Add every newly-constructed instance into this map
 					methodExpr := p.callRuntime(loc, "__privateAdd", []js_ast.Expr{
 						target,
-						{Loc: loc, Data: &js_ast.EIdentifier{Ref: ref}},
+						{Loc: prop.Key.Loc, Data: &js_ast.EIdentifier{Ref: ref}},
 					})
 					p.recordUsage(ref)
 
@@ -2371,7 +2397,7 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 					//     #priv() {}
 					//   }
 					//
-					if prop.IsStatic {
+					if prop.Flags.Has(js_ast.PropertyIsStatic) {
 						// Move this property to an assignment after the class ends
 						staticPrivateMethods = append(staticPrivateMethods, methodExpr)
 					} else {
@@ -2389,7 +2415,7 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 				}
 				p.recordUsage(methodRef)
 				privateMembers = append(privateMembers, js_ast.Assign(
-					js_ast.Expr{Loc: loc, Data: &js_ast.EIdentifier{Ref: methodRef}},
+					js_ast.Expr{Loc: prop.Key.Loc, Data: &js_ast.EIdentifier{Ref: methodRef}},
 					prop.ValueOrNil,
 				))
 				continue
@@ -2435,7 +2461,8 @@ func (p *parser) lowerClass(stmt js_ast.Stmt, expr js_ast.Expr, result visitClas
 
 			// Append it to the list to reuse existing allocation space
 			class.Properties = append(class.Properties, js_ast.Property{
-				IsMethod:   true,
+				Flags:      js_ast.PropertyIsMethod,
+				Loc:        classLoc,
 				Key:        js_ast.Expr{Loc: classLoc, Data: &js_ast.EString{Value: helpers.StringToUTF16("constructor")}},
 				ValueOrNil: js_ast.Expr{Loc: classLoc, Data: ctor},
 			})
