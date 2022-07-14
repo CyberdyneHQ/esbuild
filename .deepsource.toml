@@ -12,5 +12,9 @@ enabled = true
   import_root = "github.com/CyberdyneHQ/esbuild"
 
 [[transformers]]
-name = "gofmt"
+name = "prettier"
+enabled = true
+
+[[transformers]]
+name = "gofumpt"
 enabled = true
