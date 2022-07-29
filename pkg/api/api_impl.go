@@ -1532,7 +1532,6 @@ func (impl *pluginImpl) onStart(callback func() (OnStartResult, error)) {
 		Name: impl.plugin.Name,
 		Callback: func() (result config.OnStartResult) {
 			response, err := callback()
-
 			if err != nil {
 				result.ThrownError = err
 				return
