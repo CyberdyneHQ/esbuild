@@ -220,10 +220,9 @@
   TypeScript 4.7 introduced the ability to write an `extends` constraint after an `infer` type variable, which looks like this:
 
   ```ts
-  type FirstIfString<T> =
-    T extends [infer S extends string, ...unknown[]]
-      ? S
-      : never;
+  type FirstIfString<T> = T extends [infer S extends string, ...unknown[]]
+  	? S
+  	: never;
   ```
 
   You can read the blog post for more details: https://devblogs.microsoft.com/typescript/announcing-typescript-4-7/#extends-constraints-on-infer-type-variables. Previously this was a syntax error in esbuild but with this release, esbuild can now parse this syntax correctly.
@@ -801,12 +800,13 @@
 
   ```ts
   class A<T> {}
-  new A<number> /* ASI now happens here */
-  if (0) {}
+  new A<number>(); /* ASI now happens here */
+  if (0) {
+  }
 
   interface B {
-    (a: number): typeof a /* ASI now happens here */
-    <T>(): void
+  	(a: number): typeof a /* ASI now happens here */;
+  	<T>(): void;
   }
   ```
 
@@ -1642,8 +1642,8 @@ Something went wrong with the publishing script for the previous release. Publis
   The upcoming version of TypeScript now lets you specify `<...>` type parameters on a JavaScript identifier without using a call expression:
 
   ```ts
-  const ErrorMap = Map<string, Error>;  // new () => Map<string, Error>
-  const errorMap = new ErrorMap();  // Map<string, Error>
+  const ErrorMap = Map<string, Error>; // new () => Map<string, Error>
+  const errorMap = new ErrorMap(); // Map<string, Error>
   ```
 
   With this release, esbuild can now parse these new type annotations. This feature was contributed by [@g-plane](https://github.com/g-plane).
