@@ -1609,7 +1609,7 @@ function replaceDetailsInMessages(messages: types.Message[], stash: ObjectStash)
 }
 
 function sanitizeLocation(location: types.PartialMessage['location'], where: string): types.Message['location'] {
-  if (location == null) return null;
+  if (location === null) return null;
 
   let keys: OptionKeys = {};
   let file = getFlag(location, keys, 'file', mustBeString);
